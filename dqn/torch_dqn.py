@@ -1,8 +1,8 @@
 import torch
 import torch.optim as optim
 import numpy as np
-from utils.replay import ReplayMemory
-from utils.torch_utils import to_torch_tensor, soft_update
+from utils.replay import PrioritizedReplayMemory
+from utils.torch_utils import to_tensor, soft_update, replay_entry
 
 
 class DQNAgent:
@@ -69,9 +69,8 @@ class DQNAgent:
         self.optimizer = optim.Adam(self.model.parameters(), lr=learn_rate)
 
         # initialize experience buffer
-        self.replay = ReplayMemory(state_dim=self.model.input_size,
-                                   action_dim=(1,),
-                                   max_len=replay_len)
+        # self.replay = ReplayMemory(maxlen=replay_len)
+        self.replay = PrioritizedReplayMemory(maxlen=replay_len)
 
         # logger
         self.logger = logger
@@ -135,8 +134,9 @@ class DQNAgent:
         # convert action to action choice
         action = self.actions.index(action)
 
-        # add experience to buffer
-        self.replay.append(state, action, reward, next_state, done)
+        # add experience to replay memory
+        entry = replay_entry(state, action, reward, next_state, done)
+        self.replay.append(entry)
 
         # learn from experiences
         if self.replay.len() > self.batch_size:
@@ -148,10 +148,9 @@ class DQNAgent:
         :return: None
         """
         # create batch experiences for learning
-        states, actions, rewards, next_states, dones = self.replay.sample(self.batch_size)
-
-        # convert to torch tensor
-        states, actions, rewards, next_states, dones = to_torch_tensor(states, actions, rewards, next_states, dones)
+        # minibatch = self.replay.sample(self.batch_size)
+        minibatch, indices, weights = self.replay.sample(self.batch_size)
+        states, actions, rewards, next_states, dones = to_tensor(minibatch)
 
         with torch.no_grad():
 
@@ -159,22 +158,25 @@ class DQNAgent:
 
             # amax = argmax Q(s+1)
             a_max = torch.argmax(self.model(next_states), dim=1)
-            a_max = a_max.reshape((self.batch_size, 1))
 
             # Q'(s+1|amax)  -> q value for argmax of actions
             target_out = self.target_model(next_states)
-            targetQ = torch.stack([target_out[i][a_max[i]] for i in range(self.batch_size)])
+            targetQ = torch.vstack([target_out[i][a_max[i]] for i in range(self.batch_size)])
 
             # y = r + gamma * Q'(s+1|amax)
             y = rewards + self.discount_factor * targetQ * (1-dones)
 
         # Q(s|a) -> q value for action from local policy
         model_out = self.model(states)
-        Q = torch.stack([model_out[i][actions[i].numpy()] for i in range(self.batch_size)])
+        Q = torch.vstack([model_out[i][actions[i].numpy()] for i in range(self.batch_size)])
 
         # calculate mse loss
-        td_error = y-Q
-        loss = torch.mean(td_error**2)
+        td_error = (y-Q).squeeze(1)
+        weighted_td_error = td_error * torch.as_tensor(weights)
+        loss = torch.mean(weighted_td_error ** 2)
+
+        # update priorities in replay
+        self.replay.update(indices, td_error.detach().tolist())
 
         # update network
         self.optimizer.zero_grad()
