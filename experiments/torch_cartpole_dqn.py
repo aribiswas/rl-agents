@@ -26,10 +26,10 @@ def train_cartpole(max_episodes=1000, max_steps=500):
                      replay_len=int(1e6),
                      discount_factor=0.99,
                      epsilon=0.9,
-                     epsilon_decay=1e-5,
+                     epsilon_decay=1e-4,
                      epsilon_min=0.1,
                      batch_size=64,
-                     learn_rate=0.01,
+                     learn_rate=0.001,
                      target_update_freq=5,
                      target_smooth_factor=0.01,
                      logger=logger)
@@ -48,6 +48,7 @@ def train_cartpole(max_episodes=1000, max_steps=500):
             action = agent.action(state)
             next_state, reward, done, _ = env.step(action)
             agent.step(state, action, reward, next_state, done)
+            state = next_state
             sum_reward += reward
             step_ct += 1
             if done:
