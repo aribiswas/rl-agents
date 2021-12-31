@@ -50,22 +50,36 @@ class ReplayMemory:
     def len(self):
         """
         Return the current size of internal memory.
+        :return: current length of replay memory (integer)
         """
         return self.mem_idx + 1
 
 
 class PrioritizedReplayMemory:
     """
-    Prioritized replay memory. This implementation utilizes a sum tree to store priorities.
-        append - O(log N)
-        sample - O(NlogN)
-        update - O(NlogN)
+    Prioritized replay memory. This implementation utilizes a list to store experiences and a sum tree to store
+    experience priorities.
+        append - O(logN)
+        sample - O(KlogN)
+        update - O(KlogN)
     where N = replay length and K = batch size
     """
 
     def __init__(self, alpha=0.6, beta=0.5, beta_factor=0.001, eps=0.0001, maxlen=int(1e6)):
+        """
+        Initialize prioritized replay memory.
+
+        :param alpha: Priority exponent (float)
+        :param beta: Importance sampling weight exponent (float)
+        :param beta_factor: Beta rise factor (float)
+        :param eps: TD error offset (float)
+        :param maxlen: Maximum capacity of replay memory (integer)
+        """
+        # memory stores the experiences in circular fashion
         self.memory = [[] for _ in range(maxlen)]
-        self.tree = [0 for _ in range(2*maxlen-1)]
+        # tree stores the priority p^a at each leaf node. Parent nodes store the sum of child node priorities.
+        # There are N=maxlen leaf nodes, and 2*N-1 total nodes.
+        self.tree = [0 for _ in range(2 * maxlen - 1)]
         self.alpha = alpha
         self.beta = beta
         self.beta_factor = beta_factor
@@ -88,9 +102,9 @@ class PrioritizedReplayMemory:
     def append(self, entry):
         """
         Append new entry to the replay memory with maximal priority. After the append operation, the sum tree priorities
-        are updated in O(logN) time.
+        are updated.
 
-        Time complexity : O(NlogN)
+        Time complexity : O(logN)
 
         :param entry: object
         :return: None
@@ -102,7 +116,7 @@ class PrioritizedReplayMemory:
         self.memory[self.mem_index] = entry
 
         # store entry with maximal priority in sum tree
-        # O(NlogN) complexity
+        # O(logN) complexity
         tree_index = self.mem_index + self.maxlen - 1
         self._store_priority(tree_index, self.max_priority)
 
@@ -122,12 +136,12 @@ class PrioritizedReplayMemory:
         Time complexity:
         The priority sum sum(p^a) is obtained from the sum tree's first element in O(1) time.
         For each segment, the sampled uniform priority is searched in the sum tree and the entry with the closest
-        priority is chosen. This occurs in O(NlogN) time, where N = size of replay.
+        priority is chosen. This occurs in O(logN) time.
 
-        The overall complexity of sampling is O(NlogN).
+        The overall complexity of sampling is O(KlogN) where K = batch size, and N = size of replay.
 
-        :param batch_size: integer
-        :return: minibatch (list), indices (integer), weights (float)
+        :param batch_size: Batch size of sample (integer)
+        :return: mini batch (list), batch indices (integer), importance sampling weights (float)
         """
         minibatch = []
         indices = []
@@ -141,7 +155,7 @@ class PrioritizedReplayMemory:
             # perform uniform sampling to get a priority for this segment
             prio_sample = np.random.uniform(prio_low, prio_high)
 
-            # sample an entry from the sum tree using the priority
+            # sample an entry from the sum tree using the priority - O(logN) complexity
             index, priority, entry = self._search_priority(0, prio_sample)
 
             # compute importance sampling weight
@@ -160,11 +174,11 @@ class PrioritizedReplayMemory:
         Update the replay memory with new TD errors. This will update the priorities in the sum tree at the specified
         indices.
 
-        Time complexity O(NlogN).
+        Time complexity O(KlogN).
 
-        :param indices: integer
-        :param errors: float
-        :return:
+        :param indices: Batch indices (integer)
+        :param errors: New TD errors (float)
+        :return: None
         """
         for idx, err in zip(indices, errors):
             abs_error = abs(err) + self.eps
@@ -175,15 +189,20 @@ class PrioritizedReplayMemory:
         """
         Update the sum tree with new priority at a specified index.
 
-        Time complexity : O(NlogN)
+        Time complexity : O(logN)
 
-        :param tree_index: integer
-        :param priority: float
+        :param tree_index: Index to update in sum tree (integer)
+        :param priority: Priority value (float)
         :return: None
         """
-        # traverse upward through the sum tree from the tree index and update priorities
+        # update the priority at the tree_index
         change = priority - self.tree[tree_index]
         self.tree[tree_index] = priority
+
+        # traverse upward through the sum tree from the tree index and update priorities of the parent nodes.
+        # This involves traversing one node at each level of the sum tree. The time complexity is equal to the height
+        # of the tree (complete binary tree), i.e. O(logT) or O(logN)
+        # where T = 2*N-1 is the total number of nodes in the tree, and N = replay length.
         while tree_index != 0:
             tree_index = (tree_index - 1) // 2
             self.tree[tree_index] += change
@@ -194,12 +213,12 @@ class PrioritizedReplayMemory:
 
     def _search_priority(self, root_index, value):
         """
-        Recursively search the sum tree for a priority value.
+        Search the sum tree for a priority value.
 
-        Time complexity : O(NlogN)
+        Time complexity : O(logN)
 
-        :param root_index: integer
-        :param value: float
+        :param root_index: Start tree index of search (integer)
+        :param value: Search value (float)
         :return: tree index (index), priority (float), entry (object)
         """
         left_index = 2 * root_index + 1
@@ -210,6 +229,8 @@ class PrioritizedReplayMemory:
             mem_index = tree_index - self.maxlen + 1
             return tree_index, self.tree[tree_index], self.memory[mem_index]
 
+        # recursively search for the priority value. The time complexity depends on the height of the tree,
+        # i.e. is O(logT) or O(logN)
         if value < self.tree[left_index]:
             return self._search_priority(left_index, value)
         else:
@@ -218,6 +239,7 @@ class PrioritizedReplayMemory:
     def len(self):
         """
         Return the current size of internal memory.
+        :return: current length of replay memory (integer)
         """
         return self.mem_index + 1
 
@@ -228,7 +250,7 @@ class PrioritizedReplayMemoryV2:
     probability distribution P = p^a / sum(p^a) in O(N) time. This is a simpler implementation but is less efficient.
 
     Time complexity:
-        append - O(log N)
+        append - O(logN)
         sample - O(N)
         update - O(K)
     where N = replay length and K = batch size
@@ -288,3 +310,10 @@ class PrioritizedReplayMemoryV2:
 
         # heapify the memory
         heapq.heapify(self.memory)
+
+    def len(self):
+        """
+        Return the current size of internal memory.
+        :return: current length of replay memory (integer)
+        """
+        return self.index + 1
