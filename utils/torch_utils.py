@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 from collections import namedtuple
 
 
@@ -21,11 +22,18 @@ def replay_entry(state, action, reward, next_state, done, dtype=torch.float32, d
     return entry
 
 
-def to_tensor(entry):
-    state_tensor = torch.vstack([e.state for e in entry])
-    action_tensor = torch.vstack([e.action for e in entry])
-    reward_tensor = torch.vstack([e.reward for e in entry])
-    next_state_tensor = torch.vstack([e.next_state for e in entry])
-    done_tensor = torch.vstack([e.done for e in entry])
-    return state_tensor, action_tensor, reward_tensor, next_state_tensor, done_tensor
-
+def to_tensor(xin):
+    if isinstance(xin, np.ndarray):
+        return torch.from_numpy(xin).float()
+    elif isinstance(xin, torch.Tensor):
+        return xin
+    elif isinstance(xin, list):
+        entry = xin
+        state_tensor = torch.vstack([e.state for e in entry])
+        action_tensor = torch.vstack([e.action for e in entry])
+        reward_tensor = torch.vstack([e.reward for e in entry])
+        next_state_tensor = torch.vstack([e.next_state for e in entry])
+        done_tensor = torch.vstack([e.done for e in entry])
+        return state_tensor, action_tensor, reward_tensor, next_state_tensor, done_tensor
+    else:
+        raise TypeError("Input must be a numpy array, torch Tensor, or a list of experience tuples.")

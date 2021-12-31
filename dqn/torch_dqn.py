@@ -139,7 +139,7 @@ class DQNAgent:
         self.replay.append(entry)
 
         # learn from experiences
-        if self.replay.len() > self.batch_size:
+        if self.replay.len() >= self.batch_size:
             self.learn()
 
     def learn(self):
@@ -191,4 +191,4 @@ class DQNAgent:
         # log data
         self.learn_count += 1
         if self.logger is not None:
-            self.logger.add_scalar('Critic/Loss', loss, self.learn_count)
+            self.logger.add_scalar('Critic/Loss', loss.detach().numpy(), self.learn_count)
