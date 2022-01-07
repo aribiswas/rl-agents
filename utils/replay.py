@@ -63,6 +63,7 @@ class PrioritizedReplayMemory:
         sample - O(KlogN)
         update - O(KlogN)
     where N = replay length and K = batch size
+    SumTree reference: https://www.fcodelabs.com/2019/03/18/Sum-Tree-Introduction/
     """
 
     def __init__(self, alpha=0.6, beta=0.5, beta_factor=0.001, eps=0.0001, maxlen=int(1e6)):
@@ -155,7 +156,7 @@ class PrioritizedReplayMemory:
             # perform uniform sampling to get a priority for this segment
             prio_sample = np.random.uniform(prio_low, prio_high)
 
-            # sample an entry from the sum tree using the priority - O(logN) complexity
+            # sample an entry from the sum tree - O(logN) complexity
             index, priority, entry = self._search_priority(0, prio_sample)
 
             # compute importance sampling weight
@@ -201,7 +202,7 @@ class PrioritizedReplayMemory:
 
         # traverse upward through the sum tree from the tree index and update priorities of the parent nodes.
         # This involves traversing one node at each level of the sum tree. The time complexity is equal to the height
-        # of the tree (complete binary tree), i.e. O(logT) or O(logN)
+        # of the tree, i.e. O(logT) or O(logN)
         # where T = 2*N-1 is the total number of nodes in the tree, and N = replay length.
         while tree_index != 0:
             tree_index = (tree_index - 1) // 2
