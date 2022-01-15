@@ -271,8 +271,8 @@ class QValueFunction(nn.Module):
         xs = F.tanh(self.sfc2(xs))
 
         # action path
-        xa = F.tanh(self.afc1(xa))
-        xa = F.tanh(self.afc2(xa))
+        xa = torch.tanh(self.afc1(xa))
+        xa = torch.tanh(self.afc2(xa))
 
         # common path
         xc = torch.cat((xs, xa), dim=1)

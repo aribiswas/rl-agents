@@ -43,7 +43,7 @@ class ReplayMemory:
         :param batch_size: integer
         :return: minibatch (list)
         """
-        batch_idxs = np.random.choice(self.mem_idx + 1, batch_size)
+        batch_idxs = np.random.choice(self.mem_idx, batch_size)
         minibatch = [self.memory[i] for i in batch_idxs]
         return minibatch
 

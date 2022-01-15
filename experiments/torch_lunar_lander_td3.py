@@ -1,16 +1,16 @@
-# Train LunarLanderContinuous-v2 with DDPG agent.
+# Train LunarLanderContinuous-v2 with TD3 agent.
 
 import gym
 import torch
 import argparse
 import collections
-from ddpg.torch_ddpg import DDPGAgent
+from td3.torch_td3 import TD3Agent
 from models.torch_models import QValueFunction, DeterministicActor
 from torch.utils.tensorboard import SummaryWriter
 
 # Set up
 torch.manual_seed(0)
-logdir = 'logs/lunar_lander_ddpg'
+logdir = 'logs/lunar_lander_td3'
 
 
 def train_lunar_lander(max_episodes=1000, max_steps=500):
@@ -18,23 +18,29 @@ def train_lunar_lander(max_episodes=1000, max_steps=500):
     env = gym.make('LunarLanderContinuous-v2')
     actor_model = DeterministicActor(state_dim=env.observation_space.shape,
                                      action_dim=env.action_space.shape)
-    critic_model = QValueFunction(state_dim=env.observation_space.shape,
-                                  action_dim=env.action_space.shape)
-    agent = DDPGAgent(actor_model,
-                      critic_model,
-                      replay_len=int(1e6),
-                      discount_factor=0.99,
-                      theta=0.15,
-                      sigma=0.2,
-                      sigma_decay=1e-6,
-                      sigma_min=0.01,
-                      mu=0,
-                      batch_size=128,
-                      actor_learn_rate=0.001,
-                      critic_learn_rate=0.001,
-                      target_update_freq=1,
-                      target_smooth_factor=0.001,
-                      logger=logger)
+    critic_model_1 = QValueFunction(state_dim=env.observation_space.shape,
+                                    action_dim=env.action_space.shape)
+    critic_model_2 = QValueFunction(state_dim=env.observation_space.shape,
+                                    action_dim=env.action_space.shape)
+    agent = TD3Agent(actor_model,
+                     critic_model_1,
+                     critic_model_2,
+                     discount_factor=0.99,
+                     batch_size=128,
+                     replay_length=int(1e6),
+                     actor_lr=0.001,
+                     critic_lr=0.001,
+                     noise_mean=0,
+                     noise_std=0.1,
+                     noise_decay=0.001,
+                     noise_min=0.01,
+                     policy_update_frequency=5,
+                     target_policy_smoothing_noise_mean=0,
+                     target_policy_smoothing_noise_std=0.1,
+                     target_policy_smoothing_noise_limit=(-1, 1),
+                     target_action_limit=(-1, 1),
+                     target_smooth_factor=0.001,
+                     logger=logger)
 
     # reward window for averaging
     reward_window = collections.deque([], maxlen=100)
@@ -75,7 +81,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Gym Lunar Lander DDPG.')
+    parser = argparse.ArgumentParser(description='Gym Lunar Lander TD3.')
     parser.add_argument('--max_episodes', metavar='max_episodes', type=int, nargs='?', default=1000,
                         help='Max episodes.')
     parser.add_argument('--max_steps', metavar='max_steps', type=int, nargs='?', default=500,
