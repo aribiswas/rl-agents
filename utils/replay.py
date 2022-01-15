@@ -54,6 +54,13 @@ class ReplayMemory:
         """
         return self.mem_idx + 1
 
+    def all(self):
+        return self.memory
+
+    def reset(self):
+        self.memory = [[] for _ in range(self.maxlen)]
+        self.mem_idx = 0
+
 
 class PrioritizedReplayMemory:
     """
